@@ -1,67 +1,84 @@
-# install Pint if necessary
-import pandas as pd
+from os.path import basename, exists
+
+def download(url):
+    filename = basename(url)
+    if not exists(filename):
+        from urllib.request import urlretrieve
+        local, _ = urlretrieve(url, filename)
+        print('Downloaded ' + local)
+
+download('https://github.com/AllenDowney/ModSimPy/raw/master/' +
+         'modsim.py')
 from modsim import *
 
-try:
-    import pint
-except ImportError:
-    !pip install pint
-
-# download modsim.py if necessary
-
-# population = 10
-un = table2.un / 1e9
-census = table2.census / 1e9
-
-//initial population stuff/original
-# elapsed_time = t_end - t_0
-//we want 2025?
-
-# p_0 = census[t_0]
-# p_end = census[t_end]
-
-# total_growth = p_end - p_0
-# annual_growth = total_growth / elapsed_time
-annual_growth = 0.03
-population = 8191988453
-
-
-def snap(population):
+#QUESTION 1:
+def the_snappening(population):
+    '''
+    Thanos's finger snap => half of population gone
+    '''
     return population // 2
 
-print(snap(population))
+def growth_func_quad(t, pop, system):
+    '''
+    quadratic growth function from Chap7
+    '''
+    return system.alpha * pop + system.beta * pop**2
 
-//20 years 
-t_0 = 1
-t_end = 20
+def run_simulation(system, growth_func):
+    '''
+    This run_simulation function can run with any models because it takes the growth func as a param.
+    '''
+    results = TimeSeries()
+    results[system.t_0] = system.p_0
 
-p_0 = snap(population)
-p_end = snap(population)
+    for t in range(system.t_0, system.t_end):
+        growth = growth_func(t, results[t], system)
+        results[t+1] = results[t] + growth
 
-""" 
-20+ years after it. Plot your model in the notebook. Provide a markdown cell with analysis of your results.
-How long would it take the population to recover?
-How might carrying capacity and maximum growth rate (as parameters) be affected by such a change?
-"""
-def recovering_post_snap():
-    pass
+    return results
+
+#QUESTION 2:
+def the_unsnappening(current_population, snapped_population):
+    '''
+    Restores the snapped population back to the current population during the Un-Snappening event.
+    current_population: The population in the year of the Un-Snappening (2030)
+    snapped_population: The population that was lost during the Snappening
+    '''
+    return current_population + snapped_population
+
+def run_simulation1(system, growth_func):
+    '''
+    Runs a population simulation for Snappening and Un-Snappening.
+    '''
+    results = TimeSeries()
+    results[system.t_0] = system.p_0
+    snapped_population = system.p_0 * 2 - system.p_0  # The population halved in 2025
+
+    for t in range(system.t_0, system.t_end):
+        if t == 2030:  #  Unsnappening
+            results[t] = the_unsnappening(results[t], snapped_population)
+        if t < system.t_end:
+            growth = growth_func(t, results[t], system)
+            results[t+1] = results[t] + growth
+
+    return results
+
+#Question 3:
+'''
+One way to reduce sufferings is to improvements in healthcare (government spend more money on healthcare)
+'''
+def growth_func_with_healthcare(t, pop, system):
+    """
+        t: Current time
+        pop: Current population
+    Returns:
+        float: Net growth of the population at time t
+    """
     
-"""
-Now, imagine that someone "snaps" their fingers again, five (5) years after the original snap, 
-and all the people who disappeared now suddenly reappear. 
-What would happen to your model now? Plot your model in the notebook.
-"""
-def unsnappening():
-    pass
+    death_rate_reduction = system.healthcare_investment * system.healthcare_efficiency # improved healthcare  => decrease in the death rate
+    effective_death_rate = max(system.base_death_rate - death_rate_reduction, 0)
 
-"""
-If population loss is attributable by death (starvation, disease, old age),
-and the purpose of wiping out half of life was to reduce this “suffering”, what might be better methods of reducing suffering (vis-à-vis your model that is).
-Expand the model in some way, and provide analysis.
-"""
-def alternate_realities():
-    pass
+    alpha = system.birth_rate - effective_death_rate
+    beta = system.beta
     
-def show_values(t0,t_end,p_0,annual_growth):
-    system = System(t_0=t_0, t_end=t_end, p_0=p_0, annual_growth=annual_growth)
-    show(system)
+    return alpha * pop + beta * pop**2
